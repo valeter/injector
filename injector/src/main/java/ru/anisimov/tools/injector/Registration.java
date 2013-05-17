@@ -5,10 +5,12 @@ public class Registration {
 	private Class<?> serviceType; 
 	private Factory<?> factory;
 	private Class<?>[] args;
+	private ReuseScope reuseScope;
 	
 	<TService> Registration(Class<TService> type, 
 			Factory<TService> factory, Class<?>... args) {
 		this.serviceName = null;
+		this.reuseScope = ReuseScope.NONE;
 		this.serviceType = type;
 		this.factory = factory;
 		this.args = args;
@@ -16,6 +18,10 @@ public class Registration {
 	
 	public <TService> void named(String name) {
 		serviceName = name;
+	}
+	
+	public void reuseWithin(ReuseScope scope) {
+		this.reuseScope = scope;
 	}
 
 	public String getName() {
@@ -32,5 +38,9 @@ public class Registration {
 
 	public Class<?>[] getArgs() {
 		return args;
+	}
+	
+	public ReuseScope getReuseScope() {
+		return reuseScope;
 	}
 }

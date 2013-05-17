@@ -8,7 +8,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import ru.anisimov.tools.injector.Container.TServiceKey;
+import ru.anisimov.tools.injector.Container.ServiceKey;
 
 @RunWith(JUnit4.class)
 public class TServiceArgsTest {
@@ -22,8 +22,8 @@ public class TServiceArgsTest {
 		objects[0] = new Bar();
 		objects[1] = new Foo();
 		
-		TServiceKey args1 = new TServiceKey(Object.class, types);
-		TServiceKey args2 = TServiceKey.valueOf(Object.class, objects);
+		ServiceKey args1 = new ServiceKey(Object.class, types);
+		ServiceKey args2 = ServiceKey.valueOf(Object.class, objects);
 		
 		assertEquals(args1, args2);
 		assertEquals(args1.hashCode(), args2.hashCode());
@@ -39,8 +39,8 @@ public class TServiceArgsTest {
 		objects[0] = new Foo();
 		objects[1] = new Bar();
 		
-		TServiceKey args1 = new TServiceKey(Object.class, types);
-		TServiceKey args2 = TServiceKey.valueOf(Object.class, objects);
+		ServiceKey args1 = new ServiceKey(Object.class, types);
+		ServiceKey args2 = ServiceKey.valueOf(Object.class, objects);
 		
 		assertFalse(Objects.equals(args1, args2));
 	}
@@ -55,8 +55,8 @@ public class TServiceArgsTest {
 		objects[0] = new Bar();
 		objects[1] = new Foo();
 		
-		TServiceKey args1 = new TServiceKey(Object.class, types);
-		TServiceKey args2 = TServiceKey.valueOf(Integer.class, objects);
+		ServiceKey args1 = new ServiceKey(Object.class, types);
+		ServiceKey args2 = ServiceKey.valueOf(Integer.class, objects);
 		
 		assertFalse(Objects.equals(args1, args2));
 	}

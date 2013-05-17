@@ -6,10 +6,12 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
+import ru.anisimov.tools.injector.exceptions.ResolutionException;
+
 @RunWith(JUnit4.class)
 public class ContainerTest {
 	@Test
-	public void registerTypeAndGetInstance() {
+	public void registerTypeAndGetInstance() throws ResolutionException {
 		class BarFactory implements Factory<IBar> {
 			@SuppressWarnings("unused")
 			@Override
@@ -28,7 +30,7 @@ public class ContainerTest {
 	}
 	
 	@Test
-	public void resolveGetsDependenciesInjected() {
+	public void resolveGetsDependenciesInjected() throws ResolutionException {
 		class BarFactory implements Factory<IBar> {
 			@SuppressWarnings("unused")
 			@Override
@@ -42,7 +44,13 @@ public class ContainerTest {
 		class FooFactory implements Factory<IFoo> {
 			@SuppressWarnings("unused")
 			@Override
-			public IFoo newInstance(Object... args) { return new Foo(builder.build().resolve(IBar.class)); }
+			public IFoo newInstance(Object... args) { 
+				try {
+					return new Foo(builder.build().resolve(IBar.class));
+				} catch (ResolutionException e) {
+					throw new RuntimeException(e);
+				} 
+			}
 		}
 		FooFactory fooFactory = new FooFactory();
 		builder.register(IFoo.class, fooFactory);
@@ -55,7 +63,7 @@ public class ContainerTest {
 	}
 	
 	@Test
-	public void constructorArgumentsArePassedOnResolve() {
+	public void constructorArgumentsArePassedOnResolve() throws ResolutionException {
 		class BarFactory implements Factory<IBar> {
 			@Override
 			public IBar newInstance(Object... args) { return new Bar((String) args[0], (boolean) args[1]); }
@@ -73,7 +81,7 @@ public class ContainerTest {
 	}
 	
 	@Test
-	public void registerMultipleConstructorOverloads() {
+	public void registerMultipleConstructorOverloads() throws ResolutionException {
 		class BarFactory1 implements Factory<IBar> {
 			@Override
 			public IBar newInstance(Object... args) { return new Bar((String) args[0], (boolean) args[1]); }
@@ -101,7 +109,7 @@ public class ContainerTest {
 	}
 	
 	@Test
-	public void ResolveNamedServices() {
+	public void resolveNamedServices() throws ResolutionException {
 		class BarFactory1 implements Factory<IBar> {
 			@SuppressWarnings("unused")
 			@Override
@@ -121,15 +129,15 @@ public class ContainerTest {
 		builder.register(IBar.class, barFactory2).named("b");
 		
 		Container container = builder.build();
-		Bar a = (Bar) container.resolveNamed("a", IBar.class);
-		Bar b = (Bar) container.resolveNamed("b", IBar.class);
+		Bar a = (Bar) container.resolve("a", IBar.class);
+		Bar b = (Bar) container.resolve("b", IBar.class);
 		
 		assertEquals(a.arg0, "a");
 		assertEquals(b.arg0, "b");
 	}
 	
 	@Test
-	public void RegistrationOrderDoesNotMatter() {
+	public void registrationOrderDoesNotMatter() throws ResolutionException {
 		class BarFactory0 implements Factory<IBar> {
 			@SuppressWarnings("unused")
 			@Override
@@ -157,13 +165,66 @@ public class ContainerTest {
 		builder.register(IBar.class, barFactory2).named("b");
 		
 		Container container = builder.build();
-		Bar a = (Bar) container.resolveNamed("a", IBar.class);
-		Bar b = (Bar) container.resolveNamed("b", IBar.class);
+		Bar a = (Bar) container.resolve("a", IBar.class);
+		Bar b = (Bar) container.resolve("b", IBar.class);
 		Bar c = (Bar) container.resolve(IBar.class);
 		
 		assertEquals(a.getArg0(), "a");
 		assertEquals(b.getArg0(), "b");
 		assertEquals(c.getArg0(), "noname");
+	}
+	
+	@Test(expected=ResolutionException.class)
+	public void resolveNotRegisteredThrows() throws ResolutionException {
+		Container.Builder builder = Container.Builder.newInstance();
+		Container container = builder.build();
+		container.resolve(IFoo.class);
+	}
+	
+	@Test
+	public void tryResolveNotRegisteredServiceReturnsNull() throws ResolutionException {
+		Container.Builder builder = Container.Builder.newInstance();
+		Container container = builder.build();
+		IFoo foo = container.tryResolve(IFoo.class);
+		assertNull(foo);
+	}
+	
+	@Test
+	public void constructorArgumentsArePassedOnTryResolve() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@Override
+			public IBar newInstance(Object... args) { return new Bar((String) args[0], (boolean) args[1]); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory, String.class, Boolean.class);
+		
+		Container container = builder.build();
+		Bar bar = (Bar)container.tryResolve(IBar.class, "first", true);
+		
+		assertEquals(bar.getArg0(), "first");
+		assertEquals(bar.isArg1(), true);
+	}
+	
+	@Test
+	public void instanceIsReusedWithinContainer() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.CONTAINER);
+		
+		Container container = builder.build();
+		
+		IBar bar1 = container.resolve(IBar.class);
+		IBar bar2 = container.resolve(IBar.class);
+		
+		assertSame(bar1, bar2);
 	}
 	
 	private interface IBar {}

@@ -7,21 +7,61 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
+import ru.anisimov.tools.injector.exceptions.ResolutionException;
+
 public class Container {
-	private Map<TServiceKey, Factory<?>> factories = new HashMap<>();
+	private Map<ServiceKey, ServiceEntry> services = new HashMap<>();
 	
 	private Container() {}
 	
-	public <TService> TService resolve(Class<TService> type, Object... args) {
-		return resolveNamed(null, type, args);
+	public <TService> TService resolve(Class<TService> type, 
+			Object... args) throws ResolutionException {
+		return resolve(null, type, args);
+	}
+	
+	public <TService> TService resolve(String name, Class<TService> type, 
+			Object... args) throws ResolutionException {
+		return resolveImpl(name, type, args, true);
+	}
+	
+	public <TService> TService tryResolve(Class<TService> type, 
+			Object... args) throws ResolutionException {
+		return resolveImpl(null, type, args, false);
 	}
 	
 	@SuppressWarnings("unchecked")
-	public <TService> TService resolveNamed(String name, Class<TService> type, Object... args) {
-		TServiceKey key = TServiceKey.valueOf(type, args);
+	private <TService> TService resolveImpl(String name, Class<TService> type, 
+			Object[] args, boolean throwIfMissing) throws ResolutionException {
+		ServiceKey key = ServiceKey.valueOf(type, args);
 		key.setName(name);
-		Factory<?> factory = factories.get(key);
-		return (TService) factory.newInstance(args);
+		ServiceEntry entry = getEntry(key);
+		if (entry != null) {
+			switch(entry.getScope()) {
+			case CONTAINER:
+				if (entry.getInstance() == null) {
+					Factory<?> factory = entry.getFactory();
+					entry.setInstance(factory.newInstance(args));
+				}
+				return (TService) entry.getInstance();
+			case NONE:
+				Factory<TService> factory = (Factory<TService>) entry.getFactory();
+				return factory.newInstance(args);
+			default:
+				throw new ResolutionException("Unknown scope");
+			}
+		}
+		if (throwIfMissing) {
+			throw new ResolutionException();
+		}
+		return null;
+	}
+	
+	private ServiceEntry getEntry(ServiceKey key) {
+		ServiceEntry result = null;
+		if (services.containsKey(key)) {
+			result = services.get(key);
+		}
+		return result;
 	}
 	
 	public static class Builder {
@@ -36,10 +76,12 @@ public class Container {
 		public Container build() {
 			Container container = new Container();
 			for (Registration registration: registrations) {
-				TServiceKey key = new TServiceKey(registration.getServiceType(), 
+				ServiceKey key = new ServiceKey(registration.getServiceType(), 
 						registration.getArgs());
 				key.setName(registration.getName());
-				container.factories.put(key, registration.getFactory());
+				ServiceEntry entry = new ServiceEntry(registration.getFactory(), 
+						registration.getReuseScope());
+				container.services.put(key, entry);
 			}
 			return container;
 		}
@@ -51,22 +93,58 @@ public class Container {
 		}
 	}
 	
-	static class TServiceKey {
+	static class ServiceEntry {
+		private Factory<?> factory;
+		private ReuseScope scope;
+		private Object instance;
+		
+		public ServiceEntry(Factory<?> factory) {
+			this(factory, ReuseScope.NONE, null);
+		}
+		
+		public ServiceEntry(Factory<?> factory, ReuseScope scope) {
+			this(factory, scope, null);
+		}
+		
+		public ServiceEntry(Factory<?> factory, ReuseScope scope, Object instance) {
+			this.factory = factory;
+			this.scope = scope;
+			this.instance = instance;
+		}
+		
+		public Factory<?> getFactory() {
+			return factory;
+		}
+
+		public Object getInstance() {
+			return instance;
+		}
+		
+		private void setInstance(Object instance) {
+			this.instance = instance;
+		}
+		
+		public ReuseScope getScope() {
+			return scope;
+		}
+	}
+	
+	static class ServiceKey {
 		private Class<?> resultType;
 		private Class<?>[] argTypes;
 		private String name;
 		
-		public TServiceKey(Class<?> resultType, Class<?>... args) {
+		public ServiceKey(Class<?> resultType, Class<?>... args) {
 			this.resultType = resultType;
 			this.argTypes = args;
 		}
 		
-		public static TServiceKey valueOf(Class<?> type, Object... args) {
+		public static ServiceKey valueOf(Class<?> type, Object... args) {
 			Class<?>[] argTypes = new Class<?>[args.length];
 			for (int i = 0; i < args.length; i++) {
 				argTypes[i] = args[i].getClass();
 			}
-			return new TServiceKey(type, argTypes);
+			return new ServiceKey(type, argTypes);
 		}
 		
 		public Class<?> getResultType() {
@@ -90,10 +168,10 @@ public class Container {
 			if (this == obj) {
 				return true;
 			}
-			if (!(obj instanceof TServiceKey)) {
+			if (!(obj instanceof ServiceKey)) {
 				return false;
 			}
-			TServiceKey tObj = (TServiceKey) obj;
+			ServiceKey tObj = (ServiceKey) obj;
 			return Objects.equals(getResultType(), tObj.getResultType()) && 
 					Arrays.equals(getArgTypes(), tObj.getArgTypes()) &&
 					Objects.equals(getName(), tObj.getName());
