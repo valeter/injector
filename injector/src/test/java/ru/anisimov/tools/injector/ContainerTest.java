@@ -10,14 +10,17 @@ import org.junit.runners.JUnit4;
 public class ContainerTest {
 	@Test
 	public void registerTypeAndGetInstance() {
-		class BarFactory implements ContainerFactory<IBar> {
+		class BarFactory implements Factory<IBar> {
 			@SuppressWarnings("unused")
 			@Override
 			public IBar newInstance(Object... args) { return new Bar(); }
 		}
 		BarFactory barFactory = new BarFactory();
-		Container container = new Container();
-		container.register(IBar.class, barFactory);
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory);
+		
+		Container container = builder.build();
 		IBar bar = container.resolve(IBar.class);
 		
 		assertNotNull(bar);
@@ -26,21 +29,25 @@ public class ContainerTest {
 	
 	@Test
 	public void resolveGetsDependenciesInjected() {
-		class BarFactory implements ContainerFactory<IBar> {
+		class BarFactory implements Factory<IBar> {
 			@SuppressWarnings("unused")
 			@Override
 			public IBar newInstance(Object... args) { return new Bar(); }
 		}
 		BarFactory barFactory = new BarFactory();
-		final Container container = new Container();
-		container.register(IBar.class, barFactory);
-		class FooFactory implements ContainerFactory<IFoo> {
+		
+		final Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory);
+		
+		class FooFactory implements Factory<IFoo> {
 			@SuppressWarnings("unused")
 			@Override
-			public IFoo newInstance(Object... args) { return new Foo(container.resolve(IBar.class)); }
+			public IFoo newInstance(Object... args) { return new Foo(builder.build().resolve(IBar.class)); }
 		}
 		FooFactory fooFactory = new FooFactory();
-		container.register(IFoo.class, fooFactory);
+		builder.register(IFoo.class, fooFactory);
+		
+		Container container = builder.build();
 		IFoo foo = container.resolve(IFoo.class);
 		
 		assertNotNull(foo);
@@ -49,13 +56,16 @@ public class ContainerTest {
 	
 	@Test
 	public void constructorArgumentsArePassedOnResolve() {
-		class BarFactory implements ContainerFactory<IBar> {
+		class BarFactory implements Factory<IBar> {
 			@Override
 			public IBar newInstance(Object... args) { return new Bar((String) args[0], (boolean) args[1]); }
 		}
 		BarFactory barFactory = new BarFactory();
-		final Container container = new Container();
-		container.register(IBar.class, barFactory, String.class, Boolean.class);
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory, String.class, Boolean.class);
+		
+		Container container = builder.build();
 		Bar bar = (Bar)container.resolve(IBar.class, "first", true);
 		
 		assertEquals(bar.getArg0(), "first");
@@ -64,21 +74,22 @@ public class ContainerTest {
 	
 	@Test
 	public void registerMultipleConstructorOverloads() {
-		final Container container = new Container();
-		class BarFactory1 implements ContainerFactory<IBar> {
+		class BarFactory1 implements Factory<IBar> {
 			@Override
 			public IBar newInstance(Object... args) { return new Bar((String) args[0], (boolean) args[1]); }
 		}
 		BarFactory1 barFactory1 = new BarFactory1();
-		class BarFactory2 implements ContainerFactory<IBar> {
+		class BarFactory2 implements Factory<IBar> {
 			@Override
 			public IBar newInstance(Object... args) { return new Bar((String) args[0]); }
 		}
 		BarFactory2 barFactory2 = new BarFactory2();
 		
-		container.register(IBar.class, barFactory1, String.class, Boolean.class);
-		container.register(IBar.class, barFactory2, String.class);
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory1, String.class, Boolean.class);
+		builder.register(IBar.class, barFactory2, String.class);
 		
+		Container container = builder.build();
 		Bar bar1 = (Bar)container.resolve(IBar.class, "first", true);
 		Bar bar2 = (Bar)container.resolve(IBar.class, "first");
 		
@@ -87,6 +98,72 @@ public class ContainerTest {
 		
 		assertEquals(bar2.getArg0(), "first");
 		assertEquals(bar2.isArg1(), false);
+	}
+	
+	@Test
+	public void ResolveNamedServices() {
+		class BarFactory1 implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar("a"); }
+		}
+		BarFactory1 barFactory1 = new BarFactory1();
+		
+		class BarFactory2 implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar("b"); }
+		}
+		BarFactory2 barFactory2 = new BarFactory2();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory1).named("a");
+		builder.register(IBar.class, barFactory2).named("b");
+		
+		Container container = builder.build();
+		Bar a = (Bar) container.resolveNamed("a", IBar.class);
+		Bar b = (Bar) container.resolveNamed("b", IBar.class);
+		
+		assertEquals(a.arg0, "a");
+		assertEquals(b.arg0, "b");
+	}
+	
+	@Test
+	public void RegistrationOrderDoesNotMatter() {
+		class BarFactory0 implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar("noname"); }
+		}
+		BarFactory0 barFactory0 = new BarFactory0();
+		
+		class BarFactory1 implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar("a"); }
+		}
+		BarFactory1 barFactory1 = new BarFactory1();
+		
+		class BarFactory2 implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar("b"); }
+		}
+		BarFactory2 barFactory2 = new BarFactory2();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory0);
+		builder.register(IBar.class, barFactory1).named("a");
+		builder.register(IBar.class, barFactory2).named("b");
+		
+		Container container = builder.build();
+		Bar a = (Bar) container.resolveNamed("a", IBar.class);
+		Bar b = (Bar) container.resolveNamed("b", IBar.class);
+		Bar c = (Bar) container.resolve(IBar.class);
+		
+		assertEquals(a.getArg0(), "a");
+		assertEquals(b.getArg0(), "b");
+		assertEquals(c.getArg0(), "noname");
 	}
 	
 	private interface IBar {}

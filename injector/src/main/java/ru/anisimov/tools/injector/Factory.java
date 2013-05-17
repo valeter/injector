@@ -1,5 +1,5 @@
 package ru.anisimov.tools.injector;
 
-public interface ContainerFactory<T> {
+public interface Factory<T> {
 	T newInstance(Object... args);
 }
