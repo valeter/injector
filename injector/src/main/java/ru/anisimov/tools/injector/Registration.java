@@ -1,6 +1,9 @@
 package ru.anisimov.tools.injector;
 
-public class Registration {
+import ru.anisimov.tools.injector.syntax.registration.RegistrationInterface;
+import ru.anisimov.tools.injector.syntax.registration.ReusedWithin;
+
+public class Registration implements RegistrationInterface {
 	private String serviceName;
 	private Class<?> serviceType; 
 	private Factory<?> factory;
@@ -16,12 +19,16 @@ public class Registration {
 		this.args = args;
 	}
 	
-	public <TService> void named(String name) {
+	@Override
+	public ReusedWithin<?> named(String name) {
 		serviceName = name;
+		return this;
 	}
 	
-	public void reuseWithin(ReuseScope scope) {
-		this.reuseScope = scope;
+	@Override
+	public Object reusedWithin(ReuseScope scope) {
+		reuseScope = scope;
+		return null;
 	}
 
 	public String getName() {

@@ -217,7 +217,7 @@ public class ContainerTest {
 		BarFactory barFactory = new BarFactory();
 		
 		Container.Builder builder = Container.Builder.newInstance();
-		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.CONTAINER);
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.CONTAINER);
 		
 		Container container = builder.build();
 		
@@ -256,7 +256,7 @@ public class ContainerTest {
 		BarFactory barFactory = new BarFactory();
 		
 		Container.Builder builder = Container.Builder.newInstance();
-		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.HIERARCHY);
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.HIERARCHY);
 		
 		Container container = builder.build();
 		
@@ -275,7 +275,7 @@ public class ContainerTest {
 		BarFactory barFactory = new BarFactory();
 		
 		Container.Builder builder = Container.Builder.newInstance();
-		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.HIERARCHY);
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.HIERARCHY);
 		
 		Container parent = builder.build();
 		Container child = parent.createChildContainer();
@@ -295,7 +295,7 @@ public class ContainerTest {
 		BarFactory barFactory = new BarFactory();
 		
 		Container.Builder builder = Container.Builder.newInstance();
-		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.HIERARCHY);
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.HIERARCHY);
 		
 		Container parent = builder.build();
 		Container child = parent.createChildContainer();
@@ -315,7 +315,7 @@ public class ContainerTest {
 		BarFactory barFactory = new BarFactory();
 		
 		Container.Builder builder = Container.Builder.newInstance();
-		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.CONTAINER);
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.CONTAINER);
 		
 		Container parent = builder.build();
 		Container child = parent.createChildContainer();
@@ -325,6 +325,29 @@ public class ContainerTest {
 		assertNotSame(bar1, bar2);
 	}
 	
+	@Test
+	public void ContainerOwnedInstancesAreDisposed() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.CONTAINER);
+		
+		builder.register(IBar.class, barFactory).reusedWithin(ReuseScope.CONTAINER);
+		builder.register(IBar.class, barFactory).named("asd").reusedWithin(ReuseScope.CONTAINER);
+		
+		Container parent = builder.build();
+		Container child = parent.createChildContainer();
+		
+		IBar bar1 = parent.resolve(IBar.class);
+		IBar bar2 = child.resolve(IBar.class);
+		assertNotSame(bar1, bar2);
+	}
+	 
 	private interface IBar {}
 	private interface IFoo {}
 	

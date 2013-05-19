@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import ru.anisimov.tools.injector.exceptions.ResolutionException;
+import ru.anisimov.tools.injector.syntax.registration.RegistrationInterface;
 
 public class Container {
 	private Map<ServiceKey, ServiceEntry> services = new HashMap<>();
@@ -124,7 +125,7 @@ public class Container {
 			return container;
 		}
 		
-		public <TService> Registration register(Class<TService> type, Factory<TService> factory, Class<?>... args) {
+		public <TService> RegistrationInterface register(Class<TService> type, Factory<TService> factory, Class<?>... args) {
 			Registration registration = new Registration(type, factory, args);
 			registrations.add(registration);
 			return registration;
