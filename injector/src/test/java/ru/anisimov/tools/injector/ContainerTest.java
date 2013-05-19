@@ -201,7 +201,7 @@ public class ContainerTest {
 		builder.register(IBar.class, barFactory, String.class, Boolean.class);
 		
 		Container container = builder.build();
-		Bar bar = (Bar)container.tryResolve(IBar.class, "first", true);
+		Bar bar = (Bar) container.tryResolve(IBar.class, "first", true);
 		
 		assertEquals(bar.getArg0(), "first");
 		assertEquals(bar.isArg1(), true);
@@ -225,6 +225,104 @@ public class ContainerTest {
 		IBar bar2 = container.resolve(IBar.class);
 		
 		assertSame(bar1, bar2);
+	}
+	
+	@Test
+	public void ServiceRegisterOnParentResolvesOnChild() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory);
+		
+		Container container = builder.build();
+		Container child = container.createChildContainer();
+		
+		IBar bar = child.resolve(IBar.class);
+		assertNotNull(bar);
+	}
+	
+	@Test
+	public void HierarchyScopedInstanceIsReusedOnSameContainer() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.HIERARCHY);
+		
+		Container container = builder.build();
+		
+		IBar bar1 = container.resolve(IBar.class);
+		IBar bar2 = container.resolve(IBar.class);
+		assertSame(bar1, bar2);
+	}
+	
+	@Test
+	public void HierarchyScopedInstanceIsReusedOnParentContainer() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.HIERARCHY);
+		
+		Container parent = builder.build();
+		Container child = parent.createChildContainer();
+		
+		IBar bar1 = child.resolve(IBar.class);
+		IBar bar2 = parent.resolve(IBar.class);
+		assertSame(bar1, bar2);
+	}
+	
+	@Test
+	public void HierarchyScopedInstanceIsReusedOnChildContainer() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.HIERARCHY);
+		
+		Container parent = builder.build();
+		Container child = parent.createChildContainer();
+		
+		IBar bar1 = parent.resolve(IBar.class);
+		IBar bar2 = child.resolve(IBar.class);
+		assertSame(bar1, bar2);
+	}
+	
+	@Test
+	public void ContainerScopedInstanceIsNotReusedOnChild() throws ResolutionException {
+		class BarFactory implements Factory<IBar> {
+			@SuppressWarnings("unused")
+			@Override
+			public IBar newInstance(Object... args) { return new Bar(); }
+		}
+		BarFactory barFactory = new BarFactory();
+		
+		Container.Builder builder = Container.Builder.newInstance();
+		builder.register(IBar.class, barFactory).reuseWithin(ReuseScope.CONTAINER);
+		
+		Container parent = builder.build();
+		Container child = parent.createChildContainer();
+		
+		IBar bar1 = parent.resolve(IBar.class);
+		IBar bar2 = child.resolve(IBar.class);
+		assertNotSame(bar1, bar2);
 	}
 	
 	private interface IBar {}

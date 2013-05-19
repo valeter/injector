@@ -11,8 +11,19 @@ import ru.anisimov.tools.injector.exceptions.ResolutionException;
 
 public class Container {
 	private Map<ServiceKey, ServiceEntry> services = new HashMap<>();
+	private Container parent;
 	
-	private Container() {}
+	private Container() { this.parent = null; }
+	
+	private Container(Container parent) { this.parent = parent; }
+	
+	public Container createChildContainer() {
+		return new Container(this);
+	}
+	
+	private void register(ServiceKey key, ServiceEntry entry) {
+		services.put(key, entry);
+	}
 	
 	public <TService> TService resolve(Class<TService> type, 
 			Object... args) throws ResolutionException {
@@ -26,7 +37,12 @@ public class Container {
 	
 	public <TService> TService tryResolve(Class<TService> type, 
 			Object... args) throws ResolutionException {
-		return resolveImpl(null, type, args, false);
+		return tryResolve(null, type, args);
+	}
+	
+	public <TService> TService tryResolve(String name, Class<TService> type, 
+			Object... args) throws ResolutionException {
+		return resolveImpl(name, type, args, false);
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -38,6 +54,20 @@ public class Container {
 		if (entry != null) {
 			switch(entry.getScope()) {
 			case CONTAINER:
+				ServiceEntry containerEntry;
+				if (entry.container != this) {
+					containerEntry = entry.cloneFor(this);
+					register(key, containerEntry);
+				} else {
+					containerEntry = entry;
+				}
+				
+				if (containerEntry.getInstance() == null) {
+					Factory<?> factory = containerEntry.getFactory();
+					containerEntry.setInstance(factory.newInstance(args));
+				}
+				return (TService) containerEntry.getInstance();
+			case HIERARCHY:
 				if (entry.getInstance() == null) {
 					Factory<?> factory = entry.getFactory();
 					entry.setInstance(factory.newInstance(args));
@@ -58,13 +88,18 @@ public class Container {
 	
 	private ServiceEntry getEntry(ServiceKey key) {
 		ServiceEntry result = null;
-		if (services.containsKey(key)) {
-			result = services.get(key);
+		Container container = this;
+		while (container != null) {
+			if (container.services.containsKey(key)) {
+				result = container.services.get(key);
+				break;
+			}
+			container = container.parent;
 		}
 		return result;
 	}
 	
-	public static class Builder {
+	public static class Builder implements ru.anisimov.tools.injector.Builder<Container> {
 		private List<Registration> registrations = new ArrayList<>();
 		
 		private Builder() {}
@@ -73,15 +108,18 @@ public class Container {
 			return new Builder();
 		}
 		
+		@Override
 		public Container build() {
 			Container container = new Container();
 			for (Registration registration: registrations) {
 				ServiceKey key = new ServiceKey(registration.getServiceType(), 
 						registration.getArgs());
 				key.setName(registration.getName());
-				ServiceEntry entry = new ServiceEntry(registration.getFactory(), 
-						registration.getReuseScope());
-				container.services.put(key, entry);
+				ServiceEntry entry = ServiceEntry.Builder.
+						newInstance(registration.getFactory()).
+						reuseScope(registration.getReuseScope()).
+						container(container).build();
+				container.register(key, entry);
 			}
 			return container;
 		}
@@ -97,19 +135,16 @@ public class Container {
 		private Factory<?> factory;
 		private ReuseScope scope;
 		private Object instance;
+		private Container container;
 		
-		public ServiceEntry(Factory<?> factory) {
-			this(factory, ReuseScope.NONE, null);
-		}
-		
-		public ServiceEntry(Factory<?> factory, ReuseScope scope) {
-			this(factory, scope, null);
-		}
-		
-		public ServiceEntry(Factory<?> factory, ReuseScope scope, Object instance) {
+		private ServiceEntry(Factory<?> factory) {
 			this.factory = factory;
-			this.scope = scope;
-			this.instance = instance;
+		}
+		
+		public ServiceEntry cloneFor(Container newContainer) {
+			return Builder.newInstance(factory).
+					reuseScope(scope).
+					container(newContainer).build();
 		}
 		
 		public Factory<?> getFactory() {
@@ -126,6 +161,50 @@ public class Container {
 		
 		public ReuseScope getScope() {
 			return scope;
+		}
+		
+		private void setScope(ReuseScope scope) {
+			this.scope = scope;
+		}
+		
+		public Container getContainer() {
+			return container;
+		}
+		
+		private void setContainer(Container container) {
+			this.container = container;
+		}
+		
+		public static class Builder implements ru.anisimov.tools.injector.Builder<ServiceEntry> {
+			private ServiceEntry entry;
+			
+			private	Builder(Factory<?> factory) {
+				entry = new ServiceEntry(factory);
+			}
+			
+			public static Builder newInstance(Factory<?> factory) {
+				return new Builder(factory);
+			}
+			
+			public Builder reuseScope(ReuseScope scope) {
+				entry.setScope(scope);
+				return this;
+			}
+			
+			public Builder instance(Object instance) {
+				entry.setInstance(instance);
+				return this;
+			}
+			
+			public Builder container(Container container) {
+				entry.setContainer(container);
+				return this;
+			}
+			
+			@Override
+			public ServiceEntry build() {
+				return entry;
+			}
 		}
 	}
 	
